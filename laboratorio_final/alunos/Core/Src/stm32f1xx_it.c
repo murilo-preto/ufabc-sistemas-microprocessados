@@ -267,4 +267,8 @@ int get_stt_ADC(void){
   return x;                            // retorna x (=stt_ADC)
 }
 
+void state_machine_setter(int state){
+  state_machine = state;
+}
+
 /* USER CODE END 1 */

@@ -62,9 +62,6 @@ static void MX_NVIC_Init(void);
 int8_t ValAdc[] = {0,0,0,0};           // vetor com vals BCD do conv ADC
 int8_t ValTime[] = {0,0,0,0};           // vetor com vals BCD do conv ADC
 int8_t vSla = 1;
-int state_machine = 0;
-// 0 Para mostrar ADC
-// 1 Para mostrar cronometro
 
 /* USER CODE END 0 */
 
@@ -406,6 +403,7 @@ void time_update_values()
   }
   set_stt_ADC(0);                      // muda get_stt_ADC p/ 0
 }
+
 
 /* USER CODE END 4 */
 
