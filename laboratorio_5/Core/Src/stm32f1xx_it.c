@@ -6,7 +6,7 @@
   ******************************************************************************
   * @attention
   *
-  * Copyright (c) 2025 STMicroelectronics.
+  * Copyright (c) 2024 STMicroelectronics.
   * All rights reserved.
   *
   * This software is licensed under terms that can be found in the LICENSE file
@@ -31,7 +31,8 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define MAX_STTADC 2                   // kte p/ testar val max sttADC
+#define DT_DEBOUNCING 250              // tempo delay para debouncing
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -41,7 +42,8 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
-
+volatile uint32_t sttADC = 0;          // VAR modo_oper LOCAL
+volatile uint32_t tIN_IRQ1 = 0;        // tempo entrada na última IRQ1
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -183,7 +185,12 @@ void PendSV_Handler(void)
 void SysTick_Handler(void)
 {
   /* USER CODE BEGIN SysTick_IRQn 0 */
-
+	HAL_IncTick();
+	if((HAL_GetTick()-tIN_IRQ1)>DT_DEBOUNCING) {
+		tIN_IRQ1 = HAL_GetTick();          // tIN (ms) da última IRQ1
+	    ++ sttADC;                       // incrementa modo operação
+	    if (sttADC>MAX_STTADC) sttADC=0; // se >MAX voltar modo_oper=0
+	 }
   /* USER CODE END SysTick_IRQn 0 */
   HAL_IncTick();
   /* USER CODE BEGIN SysTick_IRQn 1 */
@@ -197,6 +204,27 @@ void SysTick_Handler(void)
 /* For the available peripheral interrupt handler names,                      */
 /* please refer to the startup file (startup_stm32f1xx.s).                    */
 /******************************************************************************/
+
+/**
+  * @brief This function handles EXTI line1 interrupt.
+  */
+void EXTI1_IRQHandler(void)
+{
+  /* USER CODE BEGIN EXTI1_IRQn 0 */
+  if((HAL_GetTick()-tIN_IRQ1)>DT_DEBOUNCING) {
+    tIN_IRQ1 = HAL_GetTick();          // tIN (ms) da última IRQ1
+    if (HAL_GPIO_ReadPin(GPIOA,GPIO_PIN_1) == 0)
+    {
+      ++ sttADC;                       // incrementa modo operação
+      if (sttADC>MAX_STTADC) sttADC=0; // se >MAX voltar modo_oper=0
+    }
+  }
+  /* USER CODE END EXTI1_IRQn 0 */
+  HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_1);
+  /* USER CODE BEGIN EXTI1_IRQn 1 */
+
+  /* USER CODE END EXTI1_IRQn 1 */
+}
 
 /**
   * @brief This function handles ADC1 and ADC2 global interrupts.
@@ -213,5 +241,30 @@ void ADC1_2_IRQHandler(void)
 }
 
 /* USER CODE BEGIN 1 */
+
+// fn permite alterar o valor de sttADC de outro ponto no prog
+void set_stt_ADC(int m)
+{
+  // OBS: seção crítica, desabilitamos todas as IRQs p/ atualizar var
+  __disable_irq();                     // desabilita IRQs
+  if(m > MAX_STTADC) {                 // se x maior MAX permitido
+    sttADC = MAX_STTADC;               // set apenas com max
+  } else if(m < 0) {                   // se x menor que 0
+    sttADC=0;                          // set com 0
+  } else {                             // valor no intervalo 0-MAX
+    sttADC=m;                          // modifica stt_ADC
+  }
+  __enable_irq();                      // volta habilitar IRQs
+}
+
+// fn que qpenas retorna o valor da var stt_ADC
+int get_stt_ADC(void){
+  static int x;                        // var local recebe stt_ADC
+  // OBS: seção crítica, desabilitamos todas as IRQs p/ atualizar var
+  __disable_irq();                     // desabilita IRQs
+  x = sttADC;                          // faz x = sttADC
+  __enable_irq();                      // volta habilitar IRQs
+  return x;                            // retorna x (=stt_ADC)
+}
 
 /* USER CODE END 1 */

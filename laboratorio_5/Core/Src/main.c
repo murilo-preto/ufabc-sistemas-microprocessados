@@ -6,7 +6,7 @@
   ******************************************************************************
   * @attention
   *
-  * Copyright (c) 2025 STMicroelectronics.
+  * Copyright (c) 2024 STMicroelectronics.
   * All rights reserved.
   *
   * This software is licensed under terms that can be found in the LICENSE file
@@ -21,7 +21,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "funcoes_SPI_display.h"
+#include "stm32f1xx_it.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -31,7 +32,8 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define DT_VARRE  5             // inc varredura a cada 5 ms (~200 Hz)
+#define DIGITO_APAGADO 0x10     // kte valor p/ apagar um dígito no display
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -50,13 +52,15 @@ ADC_HandleTypeDef hadc1;
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_ADC1_Init(void);
+static void MX_NVIC_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
+int8_t ValAdc[] = {0,0,0,0};           // vetor com vals BCD do conv ADC
+int8_t vSla = 1;
 /* USER CODE END 0 */
 
 /**
@@ -67,7 +71,11 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-
+  uint16_t val7seg = 0x00FF,           // inicia 7-seg com 0xF (tudo apagado)
+          decPoint = 0x7FFF,           // liga o ponto decimal da unidade
+       serial_data = 0x01FF;           // dado a serializar (dig | val7seg)
+  uint32_t tNow = 0,                   // tempo que representa agora
+           tIN_varre = 0;              // registra tempo última varredura
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -89,7 +97,14 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_ADC1_Init();
+
+  /* Initialize interrupts */
+  MX_NVIC_Init();
   /* USER CODE BEGIN 2 */
+
+  reset_pinos_emula_SPI ();            // começa SPI emulada com pinos = 'high'
+  // definir os estados da FSM começando sttVarre varrendo milésimo (LSD)
+  static enum {DIG_UNI, DIG_DECS, DIG_CENS, DIG_MILS} sttVARRE=DIG_MILS;
 
   /* USER CODE END 2 */
 
@@ -100,7 +115,61 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-  }
+
+    tNow = HAL_GetTick();              // salva o tempo de agora
+
+    // tarefa #1: se (get_stt_ADC=1) dispara uma conversão ADC
+    if (get_stt_ADC() == 1) {
+      // dispara por software uma conversão ADC
+      HAL_ADC_Start_IT(&hadc1);        // dispara ADC p/ conversão por IRQ
+    }
+
+    // tarefa #2: enquanto tNow não contar novo delta_T p/ atualizar display
+    if ((tNow - tIN_varre) > DT_VARRE) {
+      continue;                        // próxima iteração
+    }
+    // se deu tempo de nova atualização no display
+    tIN_varre = tNow;                  // salva tIN p/ prox tempo varredura
+    switch (sttVARRE) {                // qual DIG vai varrer?
+    case DIG_MILS:                     // se varre milésimo (LSD)
+      sttVARRE = DIG_CENS;             // ajusta p/ prox digito
+      serial_data = 0x0008;            // display #1 do painel 4x7-seg
+      val7seg = conv_7_seg(ValAdc[0]); // dígito menos significativo
+      break;
+    case DIG_CENS:                     // varre o centésimo
+      sttVARRE = DIG_DECS;             // ajusta p/ prox digito
+      serial_data = 0x00004;           // display #2
+      // se centésimo, décimo ou a unidade != 0, mostrar dígito
+      if (ValAdc[1]>0 || ValAdc[2]>0 || ValAdc[3]>0) {
+        val7seg = conv_7_seg(ValAdc[1]);// valor do centésimo
+      } else {                         // senão, apagar o dígito
+        val7seg = conv_7_seg(DIGITO_APAGADO);
+      }
+      break;
+    case DIG_DECS:                     // varre o décimo
+      sttVARRE = DIG_UNI;              // ajusta p/ prox digito
+      serial_data = 0x0002;            // display #3
+      // se o décimo ou a unidade são diferentes de zero
+      if (ValAdc[2]>0 || ValAdc[3]>0) {
+        val7seg = conv_7_seg(ValAdc[2]); // mostrar décimo
+      } else {                         // senão apagar dígito
+        val7seg = conv_7_seg(DIGITO_APAGADO);
+      }
+      break;
+    case DIG_UNI:                      // varre MSD - unidade
+      sttVARRE = DIG_MILS;             // ajusta p/ prox digito
+      serial_data = 0x0001;            // display #4
+      if (ValAdc[3] > 0) {             // se unidade > 0
+        val7seg = conv_7_seg(ValAdc[3]); // ligar o display unidade
+        val7seg &= decPoint;           // liga o ponto decimal
+      } else {                         // se unidade =0, dig apagado
+        val7seg = conv_7_seg(DIGITO_APAGADO);
+      }
+      break;
+    }  // fim case
+    serial_data |= val7seg;            // OR com val7seg = dado a serializar
+    serializar(serial_data);           // serializa dado p/74HC595 (shift reg)
+  }    // -- fim do loop infinito
   /* USER CODE END 3 */
 }
 
@@ -148,6 +217,17 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief NVIC Configuration.
+  * @retval None
+  */
+static void MX_NVIC_Init(void)
+{
+  /* EXTI1_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(EXTI1_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI1_IRQn);
 }
 
 /**
@@ -206,7 +286,6 @@ static void MX_GPIO_Init(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
   /* USER CODE BEGIN MX_GPIO_Init_1 */
-
   /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
@@ -216,14 +295,13 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13|GPIO_PIN_14, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12|GPIO_PIN_13|GPIO_PIN_14|GPIO_PIN_15
-                          |GPIO_PIN_6|GPIO_PIN_9, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10|GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_9, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin : PC13 */
-  GPIO_InitStruct.Pin = GPIO_PIN_13;
+  /*Configure GPIO pins : PC13 PC14 */
+  GPIO_InitStruct.Pin = GPIO_PIN_13|GPIO_PIN_14;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -231,26 +309,43 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin : PA1 */
   GPIO_InitStruct.Pin = GPIO_PIN_1;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PB12 PB13 PB14 PB15
-                           PB6 PB9 */
-  GPIO_InitStruct.Pin = GPIO_PIN_12|GPIO_PIN_13|GPIO_PIN_14|GPIO_PIN_15
-                          |GPIO_PIN_6|GPIO_PIN_9;
+  /*Configure GPIO pins : PB10 PB5 PB6 PB9 */
+  GPIO_InitStruct.Pin = GPIO_PIN_10|GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_9;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
-
   /* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
-
+// fn que atende ao callback da ISR do conversor ADC1
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
+{
+  uint16_t val_adc = 0;                // define var para ler ADC
+  if(hadc->Instance == ADC1) {         // se veio ADC1
+    val_adc = HAL_ADC_GetValue(&hadc1);// capta valor adc
+    // converter o valor lido em valores hexa p/ display
+    int mVolt = val_adc*3300/4095;     // converte p/ INT 32 bits
+    ValAdc[3] = mVolt/1000;            // MSD unidade (8 bits bcd)
+    ValAdc[2] = (mVolt%1000)/100;      // décimo
+    ValAdc[1] = (mVolt%100)/10;        // centésimo
+    ValAdc[0] = mVolt%10;              // LSD milésimo
+    if (mVolt > 2000) {
+    	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_RESET);
+    }
+    else {
+    	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_SET);
+    }
+  }
+  set_stt_ADC(0);                      // muda get_stt_ADC p/ 0
+}
 /* USER CODE END 4 */
 
 /**

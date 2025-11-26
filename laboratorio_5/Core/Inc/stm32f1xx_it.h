@@ -6,7 +6,7 @@
   ******************************************************************************
   * @attention
   *
-  * Copyright (c) 2025 STMicroelectronics.
+  * Copyright (c) 2024 STMicroelectronics.
   * All rights reserved.
   *
   * This software is licensed under terms that can be found in the LICENSE file
@@ -55,9 +55,11 @@ void SVC_Handler(void);
 void DebugMon_Handler(void);
 void PendSV_Handler(void);
 void SysTick_Handler(void);
+void EXTI1_IRQHandler(void);
 void ADC1_2_IRQHandler(void);
 /* USER CODE BEGIN EFP */
-
+void set_stt_ADC(int m);
+int get_stt_ADC(void);
 /* USER CODE END EFP */
 
 #ifdef __cplusplus
