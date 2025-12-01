@@ -44,6 +44,7 @@
 /* USER CODE BEGIN PV */
 volatile uint32_t sttADC = 0;          // VAR modo_oper LOCAL
 volatile uint32_t tIN_IRQ1 = 0;        // tempo entrada na última IRQ1
+int state = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -185,12 +186,12 @@ void PendSV_Handler(void)
 void SysTick_Handler(void)
 {
   /* USER CODE BEGIN SysTick_IRQn 0 */
-	HAL_IncTick();
-	if((HAL_GetTick()-tIN_IRQ1)>DT_DEBOUNCING) {
-		tIN_IRQ1 = HAL_GetTick();          // tIN (ms) da última IRQ1
-	    ++ sttADC;                       // incrementa modo operação
-	    if (sttADC>MAX_STTADC) sttADC=0; // se >MAX voltar modo_oper=0
-	 }
+	// HAL_IncTick();
+	// if((HAL_GetTick()-tIN_IRQ1)>DT_DEBOUNCING) {
+	// 	tIN_IRQ1 = HAL_GetTick();          // tIN (ms) da última IRQ1
+	//     ++ sttADC;                       // incrementa modo operação
+	//     if (sttADC>MAX_STTADC) sttADC=0; // se >MAX voltar modo_oper=0
+	//  }
   /* USER CODE END SysTick_IRQn 0 */
   HAL_IncTick();
   /* USER CODE BEGIN SysTick_IRQn 1 */
@@ -215,8 +216,14 @@ void EXTI1_IRQHandler(void)
     tIN_IRQ1 = HAL_GetTick();          // tIN (ms) da última IRQ1
     if (HAL_GPIO_ReadPin(GPIOA,GPIO_PIN_1) == 0)
     {
-      ++ sttADC;                       // incrementa modo operação
-      if (sttADC>MAX_STTADC) sttADC=0; // se >MAX voltar modo_oper=0
+      // ++ sttADC;                       // incrementa modo operação
+      // if (sttADC>MAX_STTADC) sttADC=0; // se >MAX voltar modo_oper=0
+      if (state==0){
+        set_state(1);
+      }
+      else{
+        set_state(0);
+      }
     }
   }
   /* USER CODE END EXTI1_IRQn 0 */
@@ -267,8 +274,12 @@ int get_stt_ADC(void){
   return x;                            // retorna x (=stt_ADC)
 }
 
-void state_machine_setter(int state){
-  state_machine = state;
+int get_state(void){
+  return state;
+}
+
+void set_state(int m){
+  state = m;
 }
 
 /* USER CODE END 1 */

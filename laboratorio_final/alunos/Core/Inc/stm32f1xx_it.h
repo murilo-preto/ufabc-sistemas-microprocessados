@@ -60,7 +60,8 @@ void ADC1_2_IRQHandler(void);
 /* USER CODE BEGIN EFP */
 void set_stt_ADC(int m);
 int get_stt_ADC(void);
-void state_machine_setter(int state);
+void set_state(int m);
+int get_state(void);
 /* USER CODE END EFP */
 
 #ifdef __cplusplus

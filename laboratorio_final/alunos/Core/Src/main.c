@@ -62,6 +62,7 @@ static void MX_NVIC_Init(void);
 int8_t ValAdc[] = {0,0,0,0};           // vetor com vals BCD do conv ADC
 int8_t ValTime[] = {0,0,0,0};           // vetor com vals BCD do conv ADC
 int8_t vSla = 1;
+int state_machine = 0;
 
 /* USER CODE END 0 */
 
@@ -119,6 +120,7 @@ int main(void)
     /* USER CODE BEGIN 3 */
 
     tNow = HAL_GetTick();              // salva o tempo de agora
+    state_machine = get_state();
 
     // tarefa #1: se (get_stt_ADC=1) dispara uma conversão ADC
     if (get_stt_ADC() == 1) {

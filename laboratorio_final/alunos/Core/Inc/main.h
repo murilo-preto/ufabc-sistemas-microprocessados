@@ -54,11 +54,6 @@ void Error_Handler(void);
 void time_update_values();
 
 /* USER CODE BEGIN EFP */
-int state_machine = 0;
-/*
-0 Para mostrar ADC
-1 Para mostrar cronometro
-*/
 
 /* USER CODE END EFP */
 
