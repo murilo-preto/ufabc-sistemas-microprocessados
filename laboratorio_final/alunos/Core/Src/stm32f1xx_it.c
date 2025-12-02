@@ -186,12 +186,12 @@ void PendSV_Handler(void)
 void SysTick_Handler(void)
 {
   /* USER CODE BEGIN SysTick_IRQn 0 */
-	// HAL_IncTick();
-	// if((HAL_GetTick()-tIN_IRQ1)>DT_DEBOUNCING) {
-	// 	tIN_IRQ1 = HAL_GetTick();          // tIN (ms) da última IRQ1
-	//     ++ sttADC;                       // incrementa modo operação
-	//     if (sttADC>MAX_STTADC) sttADC=0; // se >MAX voltar modo_oper=0
-	//  }
+	 // HAL_IncTick();
+	 //if((HAL_GetTick()-tIN_IRQ1)>DT_DEBOUNCING) {
+	 //	tIN_IRQ1 = HAL_GetTick();          // tIN (ms) da última IRQ1
+	 //    ++ sttADC;                       // incrementa modo operação
+	 ///    if (sttADC>MAX_STTADC) sttADC=0; // se >MAX voltar modo_oper=0
+	 //}
   /* USER CODE END SysTick_IRQn 0 */
   HAL_IncTick();
   /* USER CODE BEGIN SysTick_IRQn 1 */
@@ -216,8 +216,8 @@ void EXTI1_IRQHandler(void)
     tIN_IRQ1 = HAL_GetTick();          // tIN (ms) da última IRQ1
     if (HAL_GPIO_ReadPin(GPIOA,GPIO_PIN_1) == 0)
     {
-      // ++ sttADC;                       // incrementa modo operação
-      // if (sttADC>MAX_STTADC) sttADC=0; // se >MAX voltar modo_oper=0
+      ++ sttADC;                       // incrementa modo operação
+      if (sttADC>MAX_STTADC) sttADC=0; // se >MAX voltar modo_oper=0
       if (state==0){
         set_state(1);
       }

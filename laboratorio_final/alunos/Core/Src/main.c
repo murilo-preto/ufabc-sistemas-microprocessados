@@ -61,7 +61,6 @@ static void MX_NVIC_Init(void);
 /* USER CODE BEGIN 0 */
 int8_t ValAdc[] = {0,0,0,0};           // vetor com vals BCD do conv ADC
 int8_t ValTime[] = {0,0,0,0};           // vetor com vals BCD do conv ADC
-int8_t vSla = 1;
 int state_machine = 0;
 
 /* USER CODE END 0 */
@@ -123,7 +122,7 @@ int main(void)
     state_machine = get_state();
 
     // tarefa #1: se (get_stt_ADC=1) dispara uma conversão ADC
-    if (get_stt_ADC() == 1) {
+    if (state_machine == 0) {
       // dispara por software uma conversão ADC
       HAL_ADC_Start_IT(&hadc1);        // dispara ADC p/ conversão por IRQ
     }
@@ -161,6 +160,7 @@ int main(void)
         else{
           if (ValAdc[1]>0 || ValAdc[2]>0 || ValAdc[3]>0) {
             val7seg = conv_7_seg(ValTime[1]);// valor do centésimo
+            val7seg &= decPoint;
           }
           else {                         // senão, apagar o dígito
             val7seg = conv_7_seg(DIGITO_APAGADO);
@@ -393,15 +393,22 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 
 void time_update_values()
 {
-  uint16_t time_now;                // define var para ler ADC
+  uint32_t time_now;                // define var para ler ADC
+  uint16_t sec1, sec2, min, cent, total_sec;
   if(1) {         // se veio ADC1
     time_now = HAL_GetTick();// capta valor adc
     // converter o valor lido em valores hexa p/ display
-    int time_now_32 = time_now*3300/4095;     // converte p/ INT 32 bits
-    ValTime[3] = time_now_32/1000;            // MSD unidade (8 bits bcd)
-    ValTime[2] = (time_now_32%1000)/100;      // décimo
-    ValTime[1] = (time_now_32%100)/10;        // centésimo
-    ValTime[0] = time_now_32%10;              // LSD milésimo
+
+    // int time_now_32 = time_now * (3300/4095);     // converte p/ INT 32 bits
+    total_sec = time_now / 1000;
+    min = total_sec / 60;
+    sec1 = ((total_sec - (60*min))/10);
+    sec2 = total_sec % 10;
+    cent = (time_now % 1000) / 100;
+    ValTime[3] = min;// time_now / 1000;            // MSD unidade (8 bits bcd)
+    ValTime[2] = sec1;// (time_now_32%1000)/100;      // décimo
+    ValTime[1] = sec2;// (time_now_32%100)/10;        // centésimo
+    ValTime[0] = cent; // time_now_32%10;              // LSD milésimo
   }
   set_stt_ADC(0);                      // muda get_stt_ADC p/ 0
 }
