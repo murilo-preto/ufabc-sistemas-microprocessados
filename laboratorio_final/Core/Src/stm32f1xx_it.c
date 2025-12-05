@@ -45,6 +45,7 @@
 volatile uint32_t sttADC = 0;          // VAR modo_oper LOCAL
 volatile uint32_t tIN_IRQ1 = 0;        // tempo entrada na última IRQ1
 volatile uint32_t tIN_IRQ2 = 0;        // tempo entrada na última IRQ1
+volatile uint32_t tIN_IRQ3 = 0;        // tempo entrada na última IRQ1
 int state = 0;
 /* USER CODE END PV */
 
@@ -263,6 +264,14 @@ void EXTI2_IRQHandler(void)
 void EXTI3_IRQHandler(void)
 {
   /* USER CODE BEGIN EXTI3_IRQn 0 */
+  if((HAL_GetTick()-tIN_IRQ3)>DT_DEBOUNCING) {
+    tIN_IRQ3 = HAL_GetTick();          // tIN (ms) da última IRQ1
+    if (HAL_GPIO_ReadPin(GPIOA,GPIO_PIN_3) == 0)
+    {
+      sttADC = 3;
+      set_state(3);
+    }
+  }
 
   /* USER CODE END EXTI3_IRQn 0 */
   HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_3);

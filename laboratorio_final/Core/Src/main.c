@@ -64,8 +64,8 @@ void update_display(int8_t values[]);
 /* USER CODE BEGIN 0 */
 int8_t ValAdc[] = {0,0,0,0};           
 int8_t ValTime[] = {0,0,0,0};           
-uint8_t BufOUT[4]; 
-uint8_t BufIN[4]; 
+int8_t BufOUT[4]; 
+int8_t BufIN[4]; 
 size_t sizeBuffs = sizeof(BufOUT);
 int state_machine = 0;
 int fPend = 0;
@@ -137,17 +137,19 @@ int main(void)
 
       if (state_machine == 2 || state_machine == 3){
         if (state_machine == 2) { 
-          BufOUT[0] = 0;
-          BufOUT[1] = 0;
-          BufOUT[2] = 0;
-          BufOUT[3] = 0;
+          HAL_ADC_Start_IT(&hadc1);
+          BufOUT[0] = ValAdc[0];
+          BufOUT[1] = ValAdc[1];
+          BufOUT[2] = ValAdc[2];
+          BufOUT[3] = ValAdc[3];
         }
 
         if (state_machine == 3) { 
-          BufOUT[0] = 0;
-          BufOUT[1] = 0;
-          BufOUT[2] = 0;
-          BufOUT[3] = 0;
+          time_update_values();
+          BufOUT[0] = ValTime[0];
+          BufOUT[1] = ValTime[1];
+          BufOUT[2] = ValTime[2];
+          BufOUT[3] = ValTime[3];
         }
 
         HAL_UART_Transmit_IT(&huart1, BufOUT, sizeBuffs); 
