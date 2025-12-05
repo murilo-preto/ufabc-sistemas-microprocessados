@@ -125,28 +125,37 @@ int main(void)
 
     tNow = HAL_GetTick();
     state_machine = get_state();
+    HAL_ADC_Start_IT(&hadc1);
 
     if ((tNow - tIN_varre) > DT_VARRE) {
       if (state_machine == 0) {
-        HAL_ADC_Start_IT(&hadc1);
         update_display(ValAdc);
-      } else {
-        time_update_values(); // Update ValTime first
+      } else if (state_machine == 1) {
+        time_update_values();
         update_display(ValTime);
+      }
+
+      if (state_machine == 2 || state_machine == 3){
+        if (state_machine == 2) { 
+          BufOUT[0] = 0;
+          BufOUT[1] = 0;
+          BufOUT[2] = 0;
+          BufOUT[3] = 0;
+        }
+
+        if (state_machine == 3) { 
+          BufOUT[0] = 0;
+          BufOUT[1] = 0;
+          BufOUT[2] = 0;
+          BufOUT[3] = 0;
+        }
+
+        HAL_UART_Transmit_IT(&huart1, BufOUT, sizeBuffs); 
       }
 
       tIN_varre = tNow;
     }
 
-    if (state_machine == 3 || fPend==1) { 
-      if (HAL_UART_GetState(&huart1) != HAL_UART_STATE_BUSY_TX) {
-        HAL_UART_Transmit_IT(&huart1, BufOUT, sizeBuffs); 
-        fPend = 0; 
-        state_machine = 0; 
-      } else {
-        fPend = 1; 
-      }
-    }
 
   }
 

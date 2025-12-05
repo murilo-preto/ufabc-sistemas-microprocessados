@@ -44,6 +44,7 @@
 /* USER CODE BEGIN PV */
 volatile uint32_t sttADC = 0;          // VAR modo_oper LOCAL
 volatile uint32_t tIN_IRQ1 = 0;        // tempo entrada na última IRQ1
+volatile uint32_t tIN_IRQ2 = 0;        // tempo entrada na última IRQ1
 int state = 0;
 /* USER CODE END PV */
 
@@ -76,7 +77,7 @@ void NMI_Handler(void)
 
   /* USER CODE END NonMaskableInt_IRQn 0 */
   /* USER CODE BEGIN NonMaskableInt_IRQn 1 */
-   while (1)
+  while (1)
   {
   }
   /* USER CODE END NonMaskableInt_IRQn 1 */
@@ -187,12 +188,12 @@ void PendSV_Handler(void)
 void SysTick_Handler(void)
 {
   /* USER CODE BEGIN SysTick_IRQn 0 */
-	 // HAL_IncTick();
-	 //if((HAL_GetTick()-tIN_IRQ1)>DT_DEBOUNCING) {
-	 //	tIN_IRQ1 = HAL_GetTick();          // tIN (ms) da última IRQ1
-	 //    ++ sttADC;                       // incrementa modo operação
-	 ///    if (sttADC>MAX_STTADC) sttADC=0; // se >MAX voltar modo_oper=0
-	 //}
+  // HAL_IncTick();
+  //if((HAL_GetTick()-tIN_IRQ1)>DT_DEBOUNCING) {
+  //	tIN_IRQ1 = HAL_GetTick();          // tIN (ms) da última IRQ1
+  //    ++ sttADC;                       // incrementa modo operação
+  ///    if (sttADC>MAX_STTADC) sttADC=0; // se >MAX voltar modo_oper=0
+  //}
   /* USER CODE END SysTick_IRQn 0 */
   HAL_IncTick();
   /* USER CODE BEGIN SysTick_IRQn 1 */
@@ -222,7 +223,7 @@ void EXTI1_IRQHandler(void)
       if (state==0){
         set_state(1);
       }
-      else{
+      else {
         set_state(0);
       }
     }
@@ -240,6 +241,14 @@ void EXTI1_IRQHandler(void)
 void EXTI2_IRQHandler(void)
 {
   /* USER CODE BEGIN EXTI2_IRQn 0 */
+  if((HAL_GetTick()-tIN_IRQ2)>DT_DEBOUNCING) {
+    tIN_IRQ2 = HAL_GetTick();          // tIN (ms) da última IRQ1
+    if (HAL_GPIO_ReadPin(GPIOA,GPIO_PIN_2) == 0)
+    {
+      sttADC = 2;
+      set_state(2);
+    }
+  }
 
   /* USER CODE END EXTI2_IRQn 0 */
   HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_2);
