@@ -76,8 +76,8 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-  uint16_t val7seg = 0x00FF, decPoint = 0x7FFF, serial_data = 0x01FF;
-  uint32_t tNow = 0, tIN_varre = 0;
+  //uint16_t val7seg = 0x00FF, decPoint = 0x7FFF, serial_data = 0x01FF;
+  uint32_t tNow = 0, tIN_varre = 0, t_ADC=0;
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -104,10 +104,8 @@ int main(void)
   /* Initialize interrupts */
   MX_NVIC_Init();
   /* USER CODE BEGIN 2 */
-
   reset_pinos_emula_SPI ();            
-  static enum {DIG_UNI, DIG_DECS, DIG_CENS, DIG_MILS} sttVARRE=DIG_MILS;
-
+  //static enum {DIG_UNI, DIG_DECS, DIG_CENS, DIG_MILS} sttVARRE=DIG_MILS;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -118,95 +116,20 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 
-    tNow = HAL_GetTick();              
+    tNow = HAL_GetTick();
     state_machine = get_state();
 
-    if (state_machine == 0) {
-      HAL_ADC_Start_IT(&hadc1);        
+    if (state_machine == 0 && ((tNow - t_ADC) > 200)) {
+      HAL_ADC_Start_IT(&hadc1);
+      t_ADC = tNow;
     }
 
     if ((tNow - tIN_varre) > DT_VARRE) {
-      continue;                        
+      tIN_varre = tNow;
+      update_display();
     }
-    tIN_varre = tNow;                  
-    time_update_values();
-    switch (sttVARRE) {                
-      case DIG_MILS:                     
-        sttVARRE = DIG_CENS;             
-        serial_data = 0x0008;            
-        if (state_machine == 0){
-          val7seg = conv_7_seg(ValAdc[0]); 
-        }
-        else{
-          val7seg = conv_7_seg(ValTime[0]); 
-        }
-        break;
-      case DIG_CENS:                     
-        sttVARRE = DIG_DECS;             
-        serial_data = 0x00004;           
-        if (state_machine == 0){
-          if (ValAdc[1]>0 || ValAdc[2]>0 || ValAdc[3]>0) {
-            val7seg = conv_7_seg(ValAdc[1]);
-          }
-          else {                         
-            val7seg = conv_7_seg(DIGITO_APAGADO);
-          }
-        }
-        else{
-          if (ValAdc[1]>0 || ValAdc[2]>0 || ValAdc[3]>0) {
-            val7seg = conv_7_seg(ValTime[1]);
-            val7seg &= decPoint;
-          }
-          else {                         
-            val7seg = conv_7_seg(DIGITO_APAGADO);
-          }
-        }
+  }
 
-        break;
-      case DIG_DECS:                     
-        sttVARRE = DIG_UNI;              
-        serial_data = 0x0002;            
-        if (state_machine == 0){
-          if (ValAdc[2]>0 || ValAdc[3]>0) {
-            val7seg = conv_7_seg(ValAdc[2]); 
-          } else {                         
-            val7seg = conv_7_seg(DIGITO_APAGADO);
-          }
-        }
-        else{
-          if (ValAdc[2]>0 || ValAdc[3]>0) {
-            val7seg = conv_7_seg(ValTime[2]); 
-          }
-          else {                         
-            val7seg = conv_7_seg(DIGITO_APAGADO);
-          }
-        }
-        break;
-      case DIG_UNI:                      
-        sttVARRE = DIG_MILS;             
-        serial_data = 0x0001;            
-        if (state_machine == 0){
-          if (ValAdc[3] > 0) {             
-            val7seg = conv_7_seg(ValAdc[3]); 
-            val7seg &= decPoint;           
-          } else {                         
-            val7seg = conv_7_seg(DIGITO_APAGADO);
-          }
-        }
-        else{
-          if (ValTime[3] > 0) {             
-          val7seg = conv_7_seg(ValTime[3]); 
-            val7seg &= decPoint;           
-          }
-          else{
-            val7seg = conv_7_seg(DIGITO_APAGADO);
-          }
-        }
-        break;
-    }  
-    serial_data |= val7seg;            
-    serializar(serial_data);           
-  }    
   /* USER CODE END 3 */
 }
 
@@ -238,7 +161,7 @@ void SystemClock_Config(void)
   /** Initializes the CPU, AHB and APB buses clocks
   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
-                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
+    |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
@@ -378,7 +301,7 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10|GPIO_PIN_12|GPIO_PIN_13|GPIO_PIN_14
-                          |GPIO_PIN_15|GPIO_PIN_6|GPIO_PIN_9, GPIO_PIN_RESET);
+                    |GPIO_PIN_15|GPIO_PIN_6|GPIO_PIN_9, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : PC13 */
   GPIO_InitStruct.Pin = GPIO_PIN_13;
@@ -396,7 +319,7 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pins : PB10 PB12 PB13 PB14
                            PB15 PB6 PB9 */
   GPIO_InitStruct.Pin = GPIO_PIN_10|GPIO_PIN_12|GPIO_PIN_13|GPIO_PIN_14
-                          |GPIO_PIN_15|GPIO_PIN_6|GPIO_PIN_9;
+    |GPIO_PIN_15|GPIO_PIN_6|GPIO_PIN_9;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -407,6 +330,92 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+void update_display()
+{
+  static enum {DIG_UNI, DIG_DECS, DIG_CENS, DIG_MILS} sttVARRE = DIG_MILS;
+  uint16_t val7seg = 0x00FF, decPoint = 0x7FFF, serial_data = 0x01FF;
+
+  time_update_values();
+
+  switch (sttVARRE) {
+    case DIG_MILS:
+      sttVARRE = DIG_CENS;
+      serial_data = 0x0008;
+      if (state_machine == 0) {
+        val7seg = conv_7_seg(ValAdc[0]);
+      }
+      else {
+        val7seg = conv_7_seg(ValTime[0]);
+      }
+      break;
+    case DIG_CENS:
+      sttVARRE = DIG_DECS;
+      serial_data = 0x0004;           // Fixed: removed extra 0
+      if (state_machine == 0) {
+        if (ValAdc[1] > 0 || ValAdc[2] > 0 || ValAdc[3] > 0) {
+          val7seg = conv_7_seg(ValAdc[1]);
+        }
+        else {
+          val7seg = conv_7_seg(DIGITO_APAGADO);
+        }
+      }
+      else {
+        if (ValTime[1] > 0 || ValTime[2] > 0 || ValTime[3] > 0) {  // Fixed: changed ValAdc to ValTime
+          val7seg = conv_7_seg(ValTime[1]);
+          val7seg &= decPoint;
+        }
+        else {
+          val7seg = conv_7_seg(DIGITO_APAGADO);
+        }
+      }
+      break;
+    case DIG_DECS:
+      sttVARRE = DIG_UNI;
+      serial_data = 0x0002;
+      if (state_machine == 0) {
+        if (ValAdc[2] > 0 || ValAdc[3] > 0) {
+          val7seg = conv_7_seg(ValAdc[2]);
+        }
+        else {
+          val7seg = conv_7_seg(DIGITO_APAGADO);
+        }
+      }
+      else {
+        if (ValTime[2] > 0 || ValTime[3] > 0) {  // Fixed: changed ValAdc to ValTime
+          val7seg = conv_7_seg(ValTime[2]);
+        }
+        else {
+          val7seg = conv_7_seg(DIGITO_APAGADO);
+        }
+      }
+      break;
+    case DIG_UNI:
+      sttVARRE = DIG_MILS;
+      serial_data = 0x0001;
+      if (state_machine == 0) {
+        if (ValAdc[3] > 0) {
+          val7seg = conv_7_seg(ValAdc[3]);
+          val7seg &= decPoint;
+        }
+        else {
+          val7seg = conv_7_seg(DIGITO_APAGADO);
+        }
+      }
+      else {
+        if (ValTime[3] > 0) {
+          val7seg = conv_7_seg(ValTime[3]);
+          val7seg &= decPoint;
+        }
+        else {
+          val7seg = conv_7_seg(DIGITO_APAGADO);
+        }
+      }
+      break;
+  }
+  serial_data |= val7seg;
+  serializar(serial_data);
+}
+
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 {
   uint16_t val_adc = 0;                
@@ -441,12 +450,10 @@ void time_update_values()
     ValTime[3] = min;
     ValTime[2] = sec1;
     ValTime[1] = sec2;
-    ValTime[0] = cent; 
+    ValTime[0] = cent;
   }
   set_stt_ADC(0);                      
 }
-
-
 /* USER CODE END 4 */
 
 /**
