@@ -47,7 +47,7 @@ ADC_HandleTypeDef hadc1;
 UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
-
+int8_t DspHex[] = {16,16,16,16};
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -57,14 +57,18 @@ static void MX_ADC1_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_NVIC_Init(void);
 /* USER CODE BEGIN PFP */
-
+void update_display(int8_t values[]);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 int8_t ValAdc[] = {0,0,0,0};           
 int8_t ValTime[] = {0,0,0,0};           
+uint8_t BufOUT[4]; 
+uint8_t BufIN[4]; 
+size_t sizeBuffs = sizeof(BufOUT);
 int state_machine = 0;
+int fPend = 0;
 
 /* USER CODE END 0 */
 
@@ -77,7 +81,7 @@ int main(void)
 
   /* USER CODE BEGIN 1 */
   //uint16_t val7seg = 0x00FF, decPoint = 0x7FFF, serial_data = 0x01FF;
-  uint32_t tNow = 0, tIN_varre = 0, t_ADC=0;
+  uint32_t tNow = 0, tIN_varre = 0;
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -104,8 +108,11 @@ int main(void)
   /* Initialize interrupts */
   MX_NVIC_Init();
   /* USER CODE BEGIN 2 */
+
   reset_pinos_emula_SPI ();            
+  HAL_UART_Receive_IT(&huart1, BufIN, sizeBuffs);
   //static enum {DIG_UNI, DIG_DECS, DIG_CENS, DIG_MILS} sttVARRE=DIG_MILS;
+  //
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -119,15 +126,28 @@ int main(void)
     tNow = HAL_GetTick();
     state_machine = get_state();
 
-    if (state_machine == 0 && ((tNow - t_ADC) > 200)) {
-      HAL_ADC_Start_IT(&hadc1);
-      t_ADC = tNow;
+    if ((tNow - tIN_varre) > DT_VARRE) {
+      if (state_machine == 0) {
+        HAL_ADC_Start_IT(&hadc1);
+        update_display(ValAdc);
+      } else {
+        time_update_values(); // Update ValTime first
+        update_display(ValTime);
+      }
+
+      tIN_varre = tNow;
     }
 
-    if ((tNow - tIN_varre) > DT_VARRE) {
-      tIN_varre = tNow;
-      update_display();
+    if (state_machine == 3 || fPend==1) { 
+      if (HAL_UART_GetState(&huart1) != HAL_UART_STATE_BUSY_TX) {
+        HAL_UART_Transmit_IT(&huart1, BufOUT, sizeBuffs); 
+        fPend = 0; 
+        state_machine = 0; 
+      } else {
+        fPend = 1; 
+      }
     }
+
   }
 
   /* USER CODE END 3 */
@@ -330,71 +350,114 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-void update_display()
+void update_display(int8_t values[])
 {
   static enum {DIG_UNI, DIG_DECS, DIG_CENS, DIG_MILS} sttVARRE = DIG_MILS;
   uint16_t val7seg = 0x00FF, decPoint = 0x7FFF, serial_data = 0x01FF;
-
-  time_update_values();
 
   switch (sttVARRE) {
     case DIG_MILS:
       sttVARRE = DIG_CENS;
       serial_data = 0x0008;
       if (state_machine == 0) {
-        val7seg = conv_7_seg(ValAdc[0]);
+        // ADC mode - display thousands
+        val7seg = conv_7_seg(values[0]);
+      }
+      else if (state_machine == 1) {
+        // Time mode - display thousands
+        val7seg = conv_7_seg(values[0]);
       }
       else {
-        val7seg = conv_7_seg(ValTime[0]);
+        // Future states can be added here
+        val7seg = conv_7_seg(values[0]);
       }
       break;
+
     case DIG_CENS:
       sttVARRE = DIG_DECS;
-      serial_data = 0x0004;           // Fixed: removed extra 0
+      serial_data = 0x0004;
+
       if (state_machine == 0) {
-        if (ValAdc[1] > 0 || ValAdc[2] > 0 || ValAdc[3] > 0) {
-          val7seg = conv_7_seg(ValAdc[1]);
+        // ADC mode - display hundreds
+        if (values[1] > 0 || values[2] > 0 || values[3] > 0) {
+          val7seg = conv_7_seg(values[1]);
+        }
+        else {
+          val7seg = conv_7_seg(DIGITO_APAGADO);
+        }
+      }
+      else if (state_machine == 1) {
+        // Time mode - display hundreds with decimal point
+        if (values[1] > 0 || values[2] > 0 || values[3] > 0) {
+          val7seg = conv_7_seg(values[1]);
+          val7seg &= decPoint;  // Add decimal point for time display
         }
         else {
           val7seg = conv_7_seg(DIGITO_APAGADO);
         }
       }
       else {
-        if (ValTime[1] > 0 || ValTime[2] > 0 || ValTime[3] > 0) {  // Fixed: changed ValAdc to ValTime
-          val7seg = conv_7_seg(ValTime[1]);
-          val7seg &= decPoint;
+        // Future states - default behavior (no decimal point)
+        if (values[1] > 0 || values[2] > 0 || values[3] > 0) {
+          val7seg = conv_7_seg(values[1]);
         }
         else {
           val7seg = conv_7_seg(DIGITO_APAGADO);
         }
       }
       break;
+
     case DIG_DECS:
       sttVARRE = DIG_UNI;
       serial_data = 0x0002;
+
       if (state_machine == 0) {
-        if (ValAdc[2] > 0 || ValAdc[3] > 0) {
-          val7seg = conv_7_seg(ValAdc[2]);
+        // ADC mode - display tens
+        if (values[2] > 0 || values[3] > 0) {
+          val7seg = conv_7_seg(values[2]);
+        }
+        else {
+          val7seg = conv_7_seg(DIGITO_APAGADO);
+        }
+      }
+      else if (state_machine == 1) {
+        // Time mode - display tens
+        if (values[2] > 0 || values[3] > 0) {
+          val7seg = conv_7_seg(values[2]);
         }
         else {
           val7seg = conv_7_seg(DIGITO_APAGADO);
         }
       }
       else {
-        if (ValTime[2] > 0 || ValTime[3] > 0) {  // Fixed: changed ValAdc to ValTime
-          val7seg = conv_7_seg(ValTime[2]);
+        // Future states
+        if (values[2] > 0 || values[3] > 0) {
+          val7seg = conv_7_seg(values[2]);
         }
         else {
           val7seg = conv_7_seg(DIGITO_APAGADO);
         }
       }
       break;
+
     case DIG_UNI:
       sttVARRE = DIG_MILS;
       serial_data = 0x0001;
+
       if (state_machine == 0) {
-        if (ValAdc[3] > 0) {
-          val7seg = conv_7_seg(ValAdc[3]);
+        // ADC mode - display units with decimal point
+        if (values[3] > 0) {
+          val7seg = conv_7_seg(values[3]);
+          val7seg &= decPoint;
+        }
+        else {
+          val7seg = conv_7_seg(DIGITO_APAGADO);
+        }
+      }
+      else if (state_machine == 1) {
+        // Time mode - display units with decimal point
+        if (values[3] > 0) {
+          val7seg = conv_7_seg(values[3]);
           val7seg &= decPoint;
         }
         else {
@@ -402,8 +465,9 @@ void update_display()
         }
       }
       else {
-        if (ValTime[3] > 0) {
-          val7seg = conv_7_seg(ValTime[3]);
+        // Future states - default with decimal point
+        if (values[3] > 0) {
+          val7seg = conv_7_seg(values[3]);
           val7seg &= decPoint;
         }
         else {
@@ -412,29 +476,11 @@ void update_display()
       }
       break;
   }
+
   serial_data |= val7seg;
   serializar(serial_data);
 }
 
-void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
-{
-  uint16_t val_adc = 0;                
-  if(hadc->Instance == ADC1) {         
-    val_adc = HAL_ADC_GetValue(&hadc1);
-    int mVolt = val_adc*3300/4095;     
-    ValAdc[3] = mVolt/1000;            
-    ValAdc[2] = (mVolt%1000)/100;      
-    ValAdc[1] = (mVolt%100)/10;        
-    ValAdc[0] = mVolt%10;              
-    if (mVolt > 2000) {
-      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_RESET);
-    }
-    else {
-      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_SET);
-    }
-  }
-  set_stt_ADC(0);                      
-}
 
 void time_update_values()
 {
@@ -453,6 +499,15 @@ void time_update_values()
     ValTime[0] = cent;
   }
   set_stt_ADC(0);                      
+}
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+  DspHex[0] = conv_ASC_num(BufIN[0]); 
+  DspHex[1] = conv_ASC_num(BufIN[1]);
+  DspHex[2] = conv_ASC_num(BufIN[2]);
+  DspHex[3] = conv_ASC_num(BufIN[3]);
+  HAL_UART_Receive_IT(&huart1, BufIN, sizeBuffs);
 }
 /* USER CODE END 4 */
 
