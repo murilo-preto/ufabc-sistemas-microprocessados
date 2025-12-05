@@ -135,21 +135,23 @@ int main(void)
         update_display(ValTime);
       }
 
-      if (state_machine == 2 || state_machine == 3){
+      if ((state_machine == 2 || state_machine == 3) && (HAL_UART_GetState(&huart1) != HAL_UART_STATE_BUSY_TX)){
         if (state_machine == 2) { 
           HAL_ADC_Start_IT(&hadc1);
-          BufOUT[0] = ValAdc[0];
-          BufOUT[1] = ValAdc[1];
+          BufOUT[0] = 'a';
+          BufOUT[1] = ValAdc[3];
           BufOUT[2] = ValAdc[2];
-          BufOUT[3] = ValAdc[3];
+          BufOUT[3] = ValAdc[1];
+          BufOUT[4] = ValAdc[0];
         }
 
         if (state_machine == 3) { 
           time_update_values();
-          BufOUT[0] = ValTime[0];
-          BufOUT[1] = ValTime[1];
+          BufOUT[0] = 'c';
+          BufOUT[1] = ValTime[3];
           BufOUT[2] = ValTime[2];
-          BufOUT[3] = ValTime[3];
+          BufOUT[3] = ValTime[1];
+          BufOUT[4] = ValTime[0];
         }
 
         HAL_UART_Transmit_IT(&huart1, BufOUT, sizeBuffs); 
@@ -514,11 +516,55 @@ void time_update_values()
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
+  int8_t input_buffer[] = {0,0,0,0};           
+
   DspHex[0] = conv_ASC_num(BufIN[0]); 
   DspHex[1] = conv_ASC_num(BufIN[1]);
   DspHex[2] = conv_ASC_num(BufIN[2]);
   DspHex[3] = conv_ASC_num(BufIN[3]);
+  DspHex[4] = conv_ASC_num(BufIN[4]);
   HAL_UART_Receive_IT(&huart1, BufIN, sizeBuffs);
+
+
+  if (BufIN[0] == 'a') { 
+
+    input_buffer[0] = DspHex[0];
+    input_buffer[1] = DspHex[1];
+    input_buffer[2] = DspHex[2];
+    input_buffer[3] = DspHex[3];
+    input_buffer[4] = DspHex[4];
+    update_display(BufIN);
+  }
+
+  if (BufIN[0] == 'a') { 
+   input_buffer[0] = DspHex[0];
+    input_buffer[1] = DspHex[1];
+    input_buffer[2] = DspHex[2];
+    input_buffer[3] = DspHex[3];
+    input_buffer[4] = DspHex[4];
+     update_display(BufIN);
+  }
+
+}
+
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
+{
+  uint16_t val_adc = 0;                
+  if(hadc->Instance == ADC1) {         
+    val_adc = HAL_ADC_GetValue(&hadc1);
+    int mVolt = val_adc*3300/4095;     
+    ValAdc[3] = mVolt/1000;            
+    ValAdc[2] = (mVolt%1000)/100;      
+    ValAdc[1] = (mVolt%100)/10;        
+    ValAdc[0] = mVolt%10;              
+    if (mVolt > 2000) {
+      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_RESET);
+    }
+    else {
+      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_SET);
+    }
+  }
+  set_stt_ADC(0);                      
 }
 /* USER CODE END 4 */
 
