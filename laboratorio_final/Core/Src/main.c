@@ -372,7 +372,7 @@ void update_display(int8_t values[])
     case DIG_MILS:
       sttVARRE = DIG_CENS;
       serial_data = 0x0008;
-      if (state_machine == 0) {
+      if (state_machine == 0 || state_machine == 2) {
         // ADC mode - display thousands
         val7seg = conv_7_seg(values[0]);
       }
@@ -390,7 +390,7 @@ void update_display(int8_t values[])
       sttVARRE = DIG_DECS;
       serial_data = 0x0004;
 
-      if (state_machine == 0) {
+      if (state_machine == 0 || state_machine == 2) {
         // ADC mode - display hundreds
         if (values[1] > 0 || values[2] > 0 || values[3] > 0) {
           val7seg = conv_7_seg(values[1]);
@@ -399,7 +399,7 @@ void update_display(int8_t values[])
           val7seg = conv_7_seg(DIGITO_APAGADO);
         }
       }
-      else if (state_machine == 1) {
+      else if (state_machine == 1 || state_machine == 3) {
         // Time mode - display hundreds with decimal point
         if (values[1] > 0 || values[2] > 0 || values[3] > 0) {
           val7seg = conv_7_seg(values[1]);
@@ -424,7 +424,7 @@ void update_display(int8_t values[])
       sttVARRE = DIG_UNI;
       serial_data = 0x0002;
 
-      if (state_machine == 0) {
+      if (state_machine == 0 || state_machine == 2) {
         // ADC mode - display tens
         if (values[2] > 0 || values[3] > 0) {
           val7seg = conv_7_seg(values[2]);
@@ -433,7 +433,7 @@ void update_display(int8_t values[])
           val7seg = conv_7_seg(DIGITO_APAGADO);
         }
       }
-      else if (state_machine == 1) {
+      else if (state_machine == 1 || state_machine == 3) {
         // Time mode - display tens
         if (values[2] > 0 || values[3] > 0) {
           val7seg = conv_7_seg(values[2]);
@@ -457,7 +457,7 @@ void update_display(int8_t values[])
       sttVARRE = DIG_MILS;
       serial_data = 0x0001;
 
-      if (state_machine == 0) {
+      if (state_machine == 0 || state_machine == 2) {
         // ADC mode - display units with decimal point
         if (values[3] > 0) {
           val7seg = conv_7_seg(values[3]);
@@ -467,7 +467,7 @@ void update_display(int8_t values[])
           val7seg = conv_7_seg(DIGITO_APAGADO);
         }
       }
-      else if (state_machine == 1) {
+      else if (state_machine == 1 || state_machine == 3) {
         // Time mode - display units with decimal point
         if (values[3] > 0) {
           val7seg = conv_7_seg(values[3]);
@@ -517,34 +517,58 @@ void time_update_values()
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
   int8_t input_buffer[] = {0,0,0,0};           
+  char send_crono[] = {'r','q','C','R','N'};           
+  char send_adc[] = {'r','q','A','D','C'};           
 
+  HAL_UART_Receive_IT(&huart1, BufIN, sizeBuffs);
   DspHex[0] = conv_ASC_num(BufIN[0]); 
   DspHex[1] = conv_ASC_num(BufIN[1]);
   DspHex[2] = conv_ASC_num(BufIN[2]);
   DspHex[3] = conv_ASC_num(BufIN[3]);
   DspHex[4] = conv_ASC_num(BufIN[4]);
-  HAL_UART_Receive_IT(&huart1, BufIN, sizeBuffs);
 
+  int crono = 0;
+  int adc = 0;
+  for (int i=0;i<4;i++){
+    if (DspHex[i] != send_crono[i]){
+      crono = 1;
+    }
+    if (DspHex[i] != send_adc[i]){
+      adc = 1;
+    }
+  }
 
-  if (BufIN[0] == 'a') { 
+  if (!adc) { 
+    // ADC
+    HAL_UART_Receive_IT(&huart1, BufIN, sizeBuffs);
+    DspHex[0] = conv_ASC_num(BufIN[0]);
+    DspHex[1] = conv_ASC_num(BufIN[1]);
+    DspHex[2] = conv_ASC_num(BufIN[2]);
+    DspHex[3] = conv_ASC_num(BufIN[3]);
+    DspHex[4] = conv_ASC_num(BufIN[4]);
 
     input_buffer[0] = DspHex[0];
     input_buffer[1] = DspHex[1];
     input_buffer[2] = DspHex[2];
     input_buffer[3] = DspHex[3];
-    input_buffer[4] = DspHex[4];
-    update_display(BufIN);
+    update_display(input_buffer);
   }
 
-  if (BufIN[0] == 'a') { 
-   input_buffer[0] = DspHex[0];
+  if (!crono) { 
+    // CRONOMETRO
+    HAL_UART_Receive_IT(&huart1, BufIN, sizeBuffs);
+    DspHex[0] = conv_ASC_num(BufIN[0]);
+    DspHex[1] = conv_ASC_num(BufIN[1]);
+    DspHex[2] = conv_ASC_num(BufIN[2]);
+    DspHex[3] = conv_ASC_num(BufIN[3]);
+    DspHex[4] = conv_ASC_num(BufIN[4]);
+
+    input_buffer[0] = DspHex[0];
     input_buffer[1] = DspHex[1];
     input_buffer[2] = DspHex[2];
     input_buffer[3] = DspHex[3];
-    input_buffer[4] = DspHex[4];
-     update_display(BufIN);
+    update_display(input_buffer);
   }
-
 }
 
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
